@@ -45,4 +45,18 @@ Das System basiert auf einer spezialisierten Architektur (Nakshatra), die das Be
 
 ---
 
-**Entwickelt im AAMS-Standard (Autonomous Agentic Managed System).**
+## 🙏 Acknowledgements & Background
+
+PetalSwarm began as an exploration of decentralized inference, inspired by the groundbreaking work of the [Petals](https://github.com/bigscience-workshop/petals) project.
+
+### Why not a Petals Fork?
+While we deeply admire the Petals architecture, we found that its current codebase (last updated ~2023) relies on dependencies like `uvloop` and `hivemind` that present significant compatibility hurdles for modern Windows/WSL-centric consumer environments. Instead of forking an aging codebase, we looked for a more lightweight, C++-native path.
+
+### Discovering Nakshatra
+During our research into the same low-level gRPC and llama.cpp integration problems, we discovered [Nakshatra](https://github.com/fthrvi/nakshatra) by **fthrvi**. 
+
+Nakshatra provided exactly the "missing link" we were looking for: a clean, layer-wise splitting approach based on `llama.cpp` without the heavy PyTorch/Hivemind overhead. PetalSwarm builds upon Nakshatra's core concepts and patches to bring decentralized inference to the next generation of hardware (RTX 5090).
+
+---
+
+**Developed in AAMS-Standard (Autonomous Agentic Managed System).**
