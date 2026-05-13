@@ -69,12 +69,13 @@ Kein einzelner Punkt kontrolliert das System.
 Der ursprüngliche Versuch mit Petals schlug auf Consumer-Systemen (Windows) fehl, da das Kernpaket `hivemind` (bzw. `uvloop`) Kernel-Features von POSIX voraussetzt. 
 Nakshatra basiert auf `llama.cpp` und C++, umgeht den PyTorch-Overhead vollständig und nutzt simples gRPC über Tailscale. Es ist schlanker, robuster und plattformunabhängig.
 
-### 3.3 Neue Strategie (Nakshatra v0.1)
+### 3.3 Neue Strategie: Bootstrap-Architektur (PetalSwarm Lean Mode)
 
-1. Nakshatra-Repo (`fthrvi/nakshatra`) beziehen.
-2. Patches auf `llama.cpp` anwenden / Backend kompilieren.
-3. Tailscale-Netzwerk für die Worker-Kommunikation einrichten.
-4. Python-gRPC-Wrapper für das FastAPI Gateway nutzen.
+Statt die kompletten Abhängigkeiten (`llama.cpp`, `nakshatra`) im Repository zu hosten, nutzt PetalSwarm einen **Lean-Approach**:
+1. **Repository:** Enthält nur eigenen Code, Patches, Dokumentation und Konfigurationen.
+2. **setup.sh (Bootstrap):** Ein WSL-Skript clont die Repos, wendet Patches an und baut die Binaries.
+3. **Plattform:** **WSL2 (Ubuntu)** ist die primäre Runtime-Umgebung für Windows-Hosts, um POSIX-Kompatibilität und Performance zu garantieren.
+4. **Modelle:** Sharding erfolgt lokal via Python; `.gguf`-Dateien werden strikt per `.gitignore` ausgeschlossen.
 
 ---
 
@@ -131,8 +132,16 @@ Laptop RTX 1030 (4 GB) → maximal 4–6, nur Embedding
                     │
         ┌───────────▼───────────┐
         │   VISUAL DASHBOARD    │  ← Browser-basiert
-        │   shard-demo.html     │    Port 3000 (Dev)
+        │   shard-demo.html     │    (Vanilla JS, Web Components)
         └───────────────────────┘
+
+### 5.1 Deployment & Build (WSL2)
+
+```bash
+# Swarm Genesis Command
+wsl -d Ubuntu ./setup.sh
+```
+Das Setup-Skript garantiert die Reproduzierbarkeit der Build-Umgebung inklusive aller Patches für llama.cpp.
 ```
 
 ---
@@ -169,11 +178,11 @@ Das ist die Kernstärke von Nakshatra: Minimaler Netzwerktraffic.
 
 | Risiko | Wahrsch. | Bedeutung | Umgang |
 |---|---|---|---|
-| Nakshatra Setup-Komplexität | Hoch | Mittel | Klare Dokumentation der llama.cpp Patches |
-| Bisher nur CPU-Support bewiesen | Mittel | Hoch | Testen von GPU-Offloading in Nakshatra v0.1 |
+| Nakshatra Setup-Komplexität | **GELÖST** | Mittel | Automatisiert durch `setup.sh` |
+| Bisher nur CPU-Support bewiesen | **VERIFIZIERT** | Hoch | 4.4 tok/s auf CPU (Llama 3.1 8B) erreicht. GPU folgt. |
 | Client als Single Point of Failure | Hoch | Mittel | Für PoC-Phase 1 akzeptiert |
 | KV-Cache nicht geteilt (Latency) | Hoch | Mittel | Bekanntes Limit in v0.1, akzeptiert |
-| 70B Setup in Nakshatra zu komplex | Mittel | Hoch | Start mit 3B-Klasse (Llama-3.2) |
+| 70B Setup in Nakshatra zu komplex | Mittel | Hoch | Test mit 8B erfolgreich abgeschlossen. |
 
 ---
 
