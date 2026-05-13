@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shard — Distributed Inference Network</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #050a0e;
+    --bg2:       #090f15;
+    --panel:     #0d1620;
+    --border:    #1a2e42;
+    --teal:      #00d4c8;
+    --teal-dim:  #00877f;
+    --amber:     #f0a500;
+    --amber-dim: #8a5c00;
+    --red:       #ff3c50;
+    --green:     #39ff14;
+    --text:      #c8dde8;
+    --text-dim:  #4a6a80;
+    --scout:     #7b5ea7;
+    --shard:     #00d4c8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* scanline overlay */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 3px,
+      rgba(0,0,0,.18) 3px, rgba(0,0,0,.18) 4px
+    );
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    background: rgba(5,10,14,.92);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .8rem 2rem;
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.4rem;
+    letter-spacing: .25em;
+    color: var(--teal);
+    text-shadow: 0 0 20px var(--teal-dim);
+  }
+
+  .logo span { color: var(--amber); }
+
+  nav { display: flex; gap: 2rem; font-size: .72rem; letter-spacing: .15em; }
+
+  nav a {
+    color: var(--text-dim);
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: color .2s;
+  }
+  nav a:hover { color: var(--teal); }
+
+  .status-pill {
+    display: flex; align-items: center; gap: .5rem;
+    font-size: .68rem; letter-spacing: .1em;
+    color: var(--green);
+    background: rgba(57,255,20,.07);
+    border: 1px solid rgba(57,255,20,.2);
+    border-radius: 2px;
+    padding: .3rem .8rem;
+  }
+
+  .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(57,255,20,.5); }
+    50%      { opacity: .5; box-shadow: 0 0 0 6px rgba(57,255,20,0); }
+  }
+
+  /* ── HERO ── */
+  .hero {
+    text-align: center;
+    padding: 4rem 2rem 2rem;
+    position: relative;
+  }
+
+  .hero h1 {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(2.2rem, 6vw, 4rem);
+    font-weight: 900;
+    color: var(--teal);
+    text-shadow: 0 0 60px rgba(0,212,200,.4);
+    letter-spacing: .06em;
+    line-height: 1.1;
+  }
+
+  .hero h1 em { color: var(--amber); font-style: normal; }
+
+  .hero p {
+    color: var(--text-dim);
+    font-size: .88rem;
+    letter-spacing: .08em;
+    margin-top: .8rem;
+    max-width: 580px;
+    margin-inline: auto;
+    line-height: 1.7;
+  }
+
+  /* ── MAIN GRID ── */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1rem;
+    max-width: 1200px;
+    margin: 1.5rem auto;
+    padding: 0 1.5rem;
+  }
+
+  @media(max-width:860px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  /* ── PANEL ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .panel-hdr {
+    padding: .6rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: .65rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+
+  .panel-hdr .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--teal);
+    box-shadow: 0 0 8px var(--teal);
+  }
+
+  /* ── MESH CANVAS ── */
+  #mesh-canvas {
+    display: block;
+    width: 100%;
+    height: 220px;
+  }
+
+  /* ── FLOW DIAGRAM ── */
+  .flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 1.2rem 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .flow-node {
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+    padding: .8rem .5rem;
+    background: rgba(255,255,255,.025);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    position: relative;
+  }
+
+  .flow-node .label {
+    font-family: 'Orbitron', monospace;
+    font-size: .65rem;
+    letter-spacing: .2em;
+    margin-bottom: .4rem;
+  }
+
+  .flow-node .type { font-size: .7rem; color: var(--text-dim); margin-bottom: .3rem; }
+
+  .flow-node .badge {
+    font-size: .6rem;
+    padding: .15rem .5rem;
+    border-radius: 2px;
+    display: inline-block;
+  }
+
+  .scout-node .label { color: var(--scout); }
+  .scout-node .badge { background: rgba(123,94,167,.2); border: 1px solid var(--scout); color: var(--scout); }
+
+  .shard-node .label { color: var(--teal); }
+  .shard-node .badge { background: rgba(0,212,200,.1); border: 1px solid var(--teal); color: var(--teal); }
+
+  .leech-node .label { color: var(--amber); }
+  .leech-node .badge { background: rgba(240,165,0,.1); border: 1px solid var(--amber); color: var(--amber); }
+
+  .flow-arrow {
+    width: 40px; text-align: center;
+    color: var(--text-dim);
+    font-size: .8rem;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .flow-arrow::after {
+    content: '';
+    display: block;
+    height: 1px;
+    background: linear-gradient(90deg, var(--teal-dim), var(--teal));
+    position: absolute;
+    top: 50%; left: 8px; right: 8px;
+    animation: flow-line 1.5s linear infinite;
+    background-size: 200%;
+  }
+
+  @keyframes flow-line {
+    0%   { background-position: 0%; }
+    100% { background-position: 200%; }
+  }
+
+  /* ── CHAT ── */
+  .chat-body {
+    height: 320px;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .8rem;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .msg {
+    max-width: 82%;
+    line-height: 1.65;
+    font-size: .8rem;
+  }
+
+  .msg.user {
+    align-self: flex-end;
+    background: rgba(0,212,200,.08);
+    border: 1px solid rgba(0,212,200,.2);
+    border-radius: 2px 2px 0 2px;
+    padding: .6rem .9rem;
+    color: var(--teal);
+  }
+
+  .msg.assistant {
+    align-self: flex-start;
+    background: rgba(255,255,255,.03);
+    border: 1px solid var(--border);
+    border-radius: 2px 2px 2px 0;
+    padding: .6rem .9rem;
+    color: var(--text);
+  }
+
+  .msg.system {
+    align-self: center;
+    font-size: .64rem;
+    color: var(--text-dim);
+    letter-spacing: .06em;
+    border: none; background: none;
+  }
+
+  .msg-meta {
+    font-size: .58rem;
+    color: var(--text-dim);
+    letter-spacing: .08em;
+    margin-top: .3rem;
+  }
+
+  .typing-cursor {
+    display: inline-block;
+    width: 7px; height: 1em;
+    background: var(--teal);
+    animation: blink .7s step-end infinite;
+    vertical-align: text-bottom;
+  }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .chat-input-row {
+    display: flex;
+    border-top: 1px solid var(--border);
+  }
+
+  .chat-input-row input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: .78rem;
+    padding: .75rem 1rem;
+    letter-spacing: .04em;
+  }
+
+  .chat-input-row input::placeholder { color: var(--text-dim); }
+
+  .send-btn {
+    padding: 0 1.2rem;
+    background: rgba(0,212,200,.1);
+    border: none; border-left: 1px solid var(--border);
+    color: var(--teal);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: .72rem;
+    letter-spacing: .1em;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: background .2s;
+  }
+
+  .send-btn:hover { background: rgba(0,212,200,.2); }
+  .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── STATS SIDEBAR ── */
+  .stats { display: flex; flex-direction: column; gap: 1rem; }
+
+  .stat-block { padding: 1rem; }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: .45rem 0;
+    border-bottom: 1px solid rgba(26,46,66,.6);
+    font-size: .72rem;
+  }
+
+  .stat-row:last-child { border-bottom: none; }
+
+  .stat-row .k { color: var(--text-dim); letter-spacing: .06em; }
+
+  .stat-row .v {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    font-size: .95rem;
+    color: var(--teal);
+  }
+
+  .stat-row .v.amber { color: var(--amber); }
+  .stat-row .v.green { color: var(--green); }
+
+  /* ── PHASE BAR ── */
+  .phase-bar {
+    padding: .8rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+  }
+
+  .phase-label {
+    font-size: .6rem;
+    letter-spacing: .12em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .bar-track {
+    height: 4px;
+    background: var(--bg);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--teal);
+    transition: width .4s ease;
+  }
+
+  .bar-fill.amber { background: var(--amber); }
+  .bar-fill.scout { background: var(--scout); }
+
+  /* ── API SNIPPET ── */
+  .code-block {
+    margin: 0;
+    padding: 1rem;
+    font-size: .67rem;
+    line-height: 1.7;
+    overflow-x: auto;
+    color: #8ba5bc;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+  }
+
+  .code-block .kw  { color: var(--scout); }
+  .code-block .str { color: #79c59e; }
+  .code-block .fn  { color: var(--amber); }
+  .code-block .cm  { color: var(--text-dim); }
+
+  /* ── NODE LIST ── */
+  .node-list { padding: .5rem 0; }
+
+  .node-item {
+    display: flex;
+    flex-direction: column;
+    padding: .8rem 1rem;
+    font-size: .68rem;
+    border-bottom: 1px solid rgba(26,46,66,.4);
+    transition: background .15s;
+  }
+
+  .node-item:hover { background: rgba(255,255,255,.02); }
+  
+  .node-item.self {
+    border-left: 2px solid var(--amber);
+    background: rgba(240,165,0,.03);
+  }
+
+  .node-header {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    margin-bottom: .4rem;
+  }
+
+  .node-details {
+    padding-left: 1.2rem;
+    color: var(--text-dim);
+    font-size: .6rem;
+    line-height: 1.5;
+  }
+
+  .feas-row td {
+    padding: .4rem .5rem;
+    border-bottom: 1px solid rgba(26,46,66,.3);
+  }
+  .feas-row:last-child td { border-bottom: none; }
+  .feas-cell { text-align: center; }
+  .feas-yes { color: var(--green); }
+  .feas-no { color: var(--red); opacity: .5; }
+
+  .node-icon {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .node-icon.scout  { background: var(--scout); box-shadow: 0 0 6px var(--scout); }
+  .node-icon.shard  { background: var(--teal);  box-shadow: 0 0 6px var(--teal); }
+  .node-icon.leech  { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .node-icon.offline{ background: #333; }
+
+  .node-name { flex: 1; color: var(--text); letter-spacing: .04em; }
+  .node-role { color: var(--text-dim); font-size: .58rem; letter-spacing: .1em; }
+  .node-creds { color: var(--amber); font-family: 'Rajdhani', sans-serif; font-weight: 600; }
+
+  /* ── FOOTER ── */
+  footer {
+    text-align: center;
+    padding: 2rem;
+    font-size: .62rem;
+    color: var(--text-dim);
+    letter-spacing: .1em;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+  }
+
+  footer a { color: var(--teal-dim); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">SH<span>▲</span>RD</div>
+  <nav>
+    <a href="#">Docs</a>
+    <a href="#">Network</a>
+    <a href="#">API</a>
+  </nav>
+  <div class="status-pill"><div class="pulse"></div>MESH ONLINE · 12 NODES</div>
+</header>
+
+<div class="hero">
+  <h1>BROWSER-POWERED<br><em>DISTRIBUTED</em> INFERENCE</h1>
+  <p>Every open tab is a compute node. Scouts draft. Shards verify.<br>Free, unlimited LLM access through a decentralized P2P mesh.</p>
+</div>
+
+<div class="grid">
+
+  <!-- LEFT COLUMN -->
+  <div style="display:flex;flex-direction:column;gap:1rem;">
+
+    <!-- MESH VISUALIZATION -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="dot"></div>P2P MESH · LIVE TOPOLOGY</div>
+      <canvas id="mesh-canvas"></canvas>
+    </div>
+
+    <!-- FLOW DIAGRAM -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="dot" style="background:var(--amber);box-shadow:0 0 8px var(--amber)"></div>SPECULATIVE DECODING PIPELINE</div>
+      <div class="flow">
+        <div class="flow-node leech-node">
+          <div class="label">LEECH</div>
+          <div class="type">Passive Consumer</div>
+          <div class="badge">sends prompt</div>
+        </div>
+        <div class="flow-arrow"></div>
+        <div class="flow-node scout-node">
+          <div class="label">SCOUT</div>
+          <div class="type">Browser / WebGPU</div>
+          <div class="badge">draft tokens</div>
+        </div>
+        <div class="flow-arrow"></div>
+        <div class="flow-node shard-node">
+          <div class="label">SHARD</div>
+          <div class="type">Desktop / BitNet</div>
+          <div class="badge">verify &amp; accept</div>
+        </div>
+        <div class="flow-arrow"></div>
+        <div class="flow-node leech-node">
+          <div class="label">STREAM</div>
+          <div class="type">Verified Output</div>
+          <div class="badge">tokens →</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SWARM CAPACITY AGGREGATE -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="dot" style="background:var(--amber);box-shadow:0 0 8px var(--amber)"></div>SWARM CAPACITY</div>
+      <div style="display:flex; justify-content: space-around; padding: 1.5rem; text-align: center; border-bottom: 1px solid var(--border);">
+        <div>
+          <div style="font-size: .65rem; color: var(--text-dim); letter-spacing: .1em;">ACTIVE NODES</div>
+          <div style="font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 2rem; color: var(--text);" id="cap-nodes">0</div>
+        </div>
+        <div>
+          <div style="font-size: .65rem; color: var(--text-dim); letter-spacing: .1em;">TOTAL VRAM</div>
+          <div style="font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 2rem; color: var(--teal);" id="cap-vram">0 GB</div>
+        </div>
+        <div>
+          <div style="font-size: .65rem; color: var(--text-dim); letter-spacing: .1em;">EST. TFLOPS</div>
+          <div style="font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 2rem; color: var(--scout);" id="cap-tflops">0</div>
+        </div>
+      </div>
+      <div style="padding: .8rem 1.5rem; font-size: .7rem; color: var(--text-dim); background: var(--bg2);">
+        ▸ Upload BW: <span style="color:var(--text)" id="cap-bw">...</span> combined<br>
+        ▸ Bottleneck: <span style="color:var(--amber)" id="cap-bn">...</span>
+      </div>
+    </div>
+
+    <!-- MODEL FEASIBILITY -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="dot"></div>MODEL FEASIBILITY MATRIX</div>
+      <div style="padding: 1rem; overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: .75rem; text-align: left;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border); color: var(--text-dim);">
+              <th style="padding: .5rem; font-weight: normal;">Model</th>
+              <th style="padding: .5rem; font-weight: normal; text-align:center;">Q4_K_M</th>
+              <th style="padding: .5rem; font-weight: normal; text-align:center;">Q3_K_S</th>
+              <th style="padding: .5rem; font-weight: normal; text-align:center;">Q2_K</th>
+            </tr>
+          </thead>
+          <tbody id="feasibility-tbody">
+            <!-- Injected via JS -->
+          </tbody>
+        </table>
+      </div>
+      <div style="padding: 1rem; border-top: 1px solid var(--border); background: rgba(0,212,200,.04);">
+        <div style="font-size: .65rem; color: var(--text-dim); letter-spacing: .1em; margin-bottom: .3rem;">RECOMMENDATION FOR <span id="rec-vram">0 GB</span>:</div>
+        <div style="color: var(--teal); font-size: .8rem; margin-bottom: .2rem; font-weight:bold;" id="rec-1">...</div>
+        <div style="color: var(--text-dim); font-size: .8rem;" id="rec-2">...</div>
+      </div>
+    </div>
+
+    <!-- CHAT DEMO -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="dot" style="background:var(--scout);box-shadow:0 0 8px var(--scout)"></div>INTERACTIVE DEMO · shard-hybrid model</div>
+      <div class="chat-body" id="chat-body">
+        <div class="msg system">— connected to local shard daemon · model: shard-hybrid —</div>
+      </div>
+      <div class="chat-input-row">
+        <input id="chat-input" type="text" placeholder="Nachricht eingeben..." autocomplete="off">
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">SEND ▶</button>
+      </div>
+    </div>
+
+    <!-- API CODE SNIPPET -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="dot"></div>API · OPENAI-COMPATIBLE DROP-IN</div>
+      <pre class="code-block"><span class="kw">from</span> openai <span class="kw">import</span> <span class="fn">OpenAI</span>
+
+client = <span class="fn">OpenAI</span>(
+    base_url=<span class="str">"http://localhost:9091/v1"</span>,
+    api_key=<span class="str">"optional"</span>
+)
+
+response = client.chat.completions.<span class="fn">create</span>(
+    model=<span class="str">"shard-hybrid"</span>,
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hallo!"</span>}],
+    stream=<span class="kw">True</span>
+)
+
+<span class="cm"># Tokens streamen genau wie bei OpenAI</span>
+<span class="kw">for</span> chunk <span class="kw">in</span> response:
+    <span class="fn">print</span>(chunk.choices[<span class="str">0</span>].delta.content <span class="kw">or</span> <span class="str">""</span>, end=<span class="str">""</span>)</pre>
+    </div>
+
+  </div>
+
+  <!-- RIGHT SIDEBAR -->
+  <div class="stats">
+
+    <!-- LIVE STATS -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="dot" style="background:var(--green);box-shadow:0 0 8px var(--green)"></div>LIVE STATS</div>
+      <div class="stat-block">
+        <div class="stat-row"><span class="k">Active Scouts</span><span class="v" id="s-scouts">7</span></div>
+        <div class="stat-row"><span class="k">Active Shards</span><span class="v" id="s-shards">5</span></div>
+        <div class="stat-row"><span class="k">Tokens / sec</span><span class="v amber" id="s-tps">48.2</span></div>
+        <div class="stat-row"><span class="k">Accept Rate</span><span class="v green" id="s-acc">91.4%</span></div>
+        <div class="stat-row"><span class="k">GPU Saved</span><span class="v green" id="s-gpu">74%</span></div>
+        <div class="stat-row"><span class="k">Requests / min</span><span class="v" id="s-rpm">31</span></div>
+      </div>
+    </div>
+
+    <!-- RESOURCE BARS -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="dot"></div>NODE LOAD</div>
+      <div class="phase-bar">
+        <div class="phase-label"><span>Scout WebGPU</span><span id="bar-scout-lbl">62%</span></div>
+        <div class="bar-track"><div class="bar-fill scout" id="bar-scout" style="width:62%"></div></div>
+      </div>
+      <div class="phase-bar">
+        <div class="phase-label"><span>Shard BitNet</span><span id="bar-shard-lbl">38%</span></div>
+        <div class="bar-track"><div class="bar-fill" id="bar-shard" style="width:38%"></div></div>
+      </div>
+      <div class="phase-bar">
+        <div class="phase-label"><span>Mesh Bandwidth</span><span id="bar-net-lbl">21%</span></div>
+        <div class="bar-track"><div class="bar-fill amber" id="bar-net" style="width:21%"></div></div>
+      </div>
+    </div>
+
+    <!-- PEER LIST -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="dot"></div>NODE REGISTRY</div>
+      <div class="node-list" id="node-list"></div>
+    </div>
+
+    <!-- COST COMPARISON -->
+    <div class="panel">
+      <div class="panel-hdr"><div class="dot" style="background:var(--amber);box-shadow:0 0 8px var(--amber)"></div>VS CLOUD COST</div>
+      <div class="stat-block">
+        <div class="stat-row"><span class="k">GPT-4o / 1K tok</span><span class="v amber">$0.005</span></div>
+        <div class="stat-row"><span class="k">Gemini Pro / 1K tok</span><span class="v amber">$0.003</span></div>
+        <div class="stat-row"><span class="k" style="color:var(--teal)">Shard / 1K tok</span><span class="v green">$0.000</span></div>
+        <div class="stat-row"><span class="k">Compute source</span><span class="v" style="font-size:.7rem">browser mesh</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  SHARD v0.4.9 · BUSL-1.1 · <a href="https://github.com/TrentPierce/Shard">github.com/TrentPierce/Shard</a> · Konvertiert zu Apache 2.0 am 13.02.2036
+</footer>
+
+<script>
+// ── MESH CANVAS ────────────────────────────────────────
+const canvas = document.getElementById('mesh-canvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width  = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const TEAL  = '#00d4c8';
+const SCOUT = '#7b5ea7';
+const AMBER = '#f0a500';
+
+const roles = ['shard','scout','scout','shard','leech','scout','shard','scout','leech','shard','scout','shard'];
+
+const nodes = Array.from({length: 12}, (_, i) => ({
+  x: Math.random(), y: Math.random(),
+  vx: (Math.random()-.5) * .0003,
+  vy: (Math.random()-.5) * .0003,
+  role: roles[i],
+  pulse: Math.random() * Math.PI * 2,
+}));
+
+function nodeColor(role) {
+  return role === 'shard' ? TEAL : role === 'scout' ? SCOUT : AMBER;
+}
+
+function drawMesh() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // move
+  nodes.forEach(n => {
+    n.x += n.vx; n.y += n.vy;
+    if (n.x < .04 || n.x > .96) n.vx *= -1;
+    if (n.y < .08 || n.y > .92) n.vy *= -1;
+    n.pulse += .025;
+  });
+
+  // edges
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i+1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      const dx = (a.x - b.x) * W, dy = (a.y - b.y) * H;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 140) {
+        const alpha = (1 - dist/140) * .35;
+        ctx.beginPath();
+        ctx.moveTo(a.x*W, a.y*H);
+        ctx.lineTo(b.x*W, b.y*H);
+        ctx.strokeStyle = `rgba(0,212,200,${alpha})`;
+        ctx.lineWidth = .5;
+        ctx.stroke();
+      }
+    }
+  }
+
+  // nodes
+  nodes.forEach(n => {
+    const px = n.x * W, py = n.y * H;
+    const glow = (Math.sin(n.pulse) * .5 + .5);
+    const col  = nodeColor(n.role);
+
+    // outer ring
+    ctx.beginPath();
+    ctx.arc(px, py, 6 + glow * 4, 0, Math.PI * 2);
+    ctx.strokeStyle = col.replace(')', `,${.08 + glow * .12})`).replace('rgb', 'rgba');
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // core dot
+    ctx.beginPath();
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
+    ctx.fillStyle = col;
+    ctx.shadowBlur = 12 + glow * 8;
+    ctx.shadowColor = col;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // label
+    ctx.fillStyle = col;
+    ctx.font = '8px Share Tech Mono';
+    ctx.fillText(n.role.toUpperCase(), px + 7, py + 3);
+  });
+
+  requestAnimationFrame(drawMesh);
+}
+drawMesh();
+
+// ── CHAT SIMULATION ──────────────────────────────────
+const RESPONSES = [
+  "Shard nutzt **spekulatives Dekodieren**: Browser-Scouts erzeugen schnell Draft-Token mit kleinen Modellen, Shard-Knoten überprüfen diese parallel mit dem vollen BitNet-1.58-Modell. Das Ergebnis ist ein drastisch geringerer GPU-Bedarf bei gleichwertiger Ausgabequalität.",
+  "Als Scout stellt dein Browser WebGPU-Rechenleistung bereit. Das Draft-Modell läuft direkt im Tab – du musst nichts installieren. Im Gegenzug erhältst du Shard-Guthaben für priorisierte API-Anfragen.",
+  "Die API ist vollständig OpenAI-kompatibel. Du kannst einfach `base_url='http://localhost:9091/v1'` setzen und jede vorhandene OpenAI-Clientbibliothek ohne weitere Änderungen verwenden.",
+  "Das P2P-Mesh basiert auf libp2p und unterstützt TCP, WebSocket, WebRTC und QUIC gleichzeitig. Nodes finden sich automatisch über Bootstrap-Peers und wählen den schnellsten verfügbaren Transport.",
+  "Shard ist **nicht** mit einer externen Blockchain verbunden. Die interne Währung heißt Shards und dient nur zur netzwerkinternen Verrechnung von Rechenleistung – kein Token, kein Investment.",
+];
+
+let busy = false;
+
+async function sendMessage() {
+  if (busy) return;
+  const input = document.getElementById('chat-input');
+  const body  = document.getElementById('chat-body');
+  const btn   = document.getElementById('send-btn');
+  const text  = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  busy = true;
+  btn.disabled = true;
+
+  // user bubble
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg user';
+  userDiv.textContent = text;
+  body.appendChild(userDiv);
+
+  // phase indicator
+  const sysDiv = document.createElement('div');
+  sysDiv.className = 'msg system';
+  sysDiv.textContent = '⟳ scout drafting…';
+  body.appendChild(sysDiv);
+  body.scrollTop = body.scrollHeight;
+
+  await sleep(600);
+  sysDiv.textContent = '✓ shard verifying draft tokens…';
+  await sleep(500);
+  sysDiv.textContent = '▶ streaming verified output';
+  await sleep(300);
+
+  // assistant bubble
+  const aDiv = document.createElement('div');
+  aDiv.className = 'msg assistant';
+  body.appendChild(aDiv);
+
+  const reply = RESPONSES[Math.floor(Math.random() * RESPONSES.length)];
+  const meta  = document.createElement('div');
+  meta.className = 'msg-meta';
+
+  // typing cursor
+  const cursor = document.createElement('span');
+  cursor.className = 'typing-cursor';
+  aDiv.appendChild(cursor);
+
+  let i = 0;
+  async function typeChar() {
+    if (i < reply.length) {
+      cursor.before(reply[i]);
+      i++;
+      body.scrollTop = body.scrollHeight;
+      await sleep(18 + Math.random() * 22);
+      return typeChar();
+    }
+    cursor.remove();
+    meta.textContent = `model: shard-hybrid · accept rate: ${(87 + Math.random()*10).toFixed(1)}% · ${(40+Math.random()*25).toFixed(0)} tok/s`;
+    aDiv.appendChild(meta);
+    sysDiv.remove();
+    busy = false;
+    btn.disabled = false;
+    body.scrollTop = body.scrollHeight;
+  }
+  typeChar();
+}
+
+document.getElementById('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── SWARM CAPACITY & MODEL FEASIBILITY ─────────────────
+const SWARM_PEERS = [
+  { name: 'node-alpha', gpu: 'RTX 5090', vram: 32, tflops: 210, bw: 500, role: 'shard', self: false },
+  { name: 'node-beta',  gpu: 'RTX 3090', vram: 24, tflops: 71,  bw: 100, role: 'shard', self: false },
+  { name: 'node-gamma', gpu: 'RTX 4060', vram: 8,  tflops: 24,  bw: 50,  role: 'scout', self: false },
+  { name: 'node-delta', gpu: 'RTX 4090', vram: 24, tflops: 83,  bw: 200, role: 'shard', self: true }
+];
+
+const MODEL_SPECS = [
+  { name: "Llama 3.2 3B",     vram_q4: 2,   vram_q3: 1.5,  vram_q2: 1    },
+  { name: "Mistral 7B",       vram_q4: 4,   vram_q3: 3,    vram_q2: 2.5  },
+  { name: "Llama 3.1 8B",     vram_q4: 5,   vram_q3: 4,    vram_q2: 3    },
+  { name: "Llama 3.1 70B",    vram_q4: 42,  vram_q3: 28,   vram_q2: 22   },
+  { name: "Mixtral 8x22B",    vram_q4: 80,  vram_q3: 60,   vram_q2: 48   },
+  { name: "Llama 3.1 405B",   vram_q4: 240, vram_q3: 180,  vram_q2: 140  },
+  { name: "DeepSeek-V3 671B", vram_q4: 390, vram_q3: 290,  vram_q2: 230  },
+];
+
+function updateSwarmCapacity() {
+  let totalVram = 0;
+  let totalTflops = 0;
+  let totalBw = 0;
+  let minBwNode = SWARM_PEERS[0];
+
+  SWARM_PEERS.forEach(p => {
+    totalVram += p.vram;
+    totalTflops += p.tflops;
+    totalBw += p.bw;
+    if (p.bw < minBwNode.bw) minBwNode = p;
+  });
+
+  document.getElementById('cap-nodes').textContent = SWARM_PEERS.length;
+  document.getElementById('cap-vram').textContent = totalVram + ' GB';
+  document.getElementById('cap-tflops').textContent = totalTflops;
+  document.getElementById('cap-bw').textContent = '~' + totalBw + ' Mbit/s';
+  document.getElementById('cap-bn').textContent = `${minBwNode.name} (${minBwNode.bw} Mbit/s)`;
+
+  // Update Registry
+  const list = document.getElementById('node-list');
+  list.innerHTML = SWARM_PEERS.map(p => `
+    <div class="node-item ${p.self ? 'self' : ''}">
+      <div class="node-header">
+        <div class="node-icon ${p.role}"></div>
+        <span class="node-name" style="${p.self ? 'color:var(--amber)' : ''}">
+          ${p.self ? '★ YOU ('+p.name+')' : '● ' + p.name}
+        </span>
+        <span class="node-role" style="margin-left:auto">${p.gpu}</span>
+        <span class="node-creds">${p.vram} GB</span>
+      </div>
+      <div class="node-details">
+        ↳ ${p.tflops} TFLOPS · ${p.bw} Mbit/s · ${p.role.toUpperCase()}
+        ${p.self ? '<br><span style="color:var(--amber)">↳ Node is active in swarm!</span>' : ''}
+      </div>
+    </div>
+  `).join('');
+
+  // Update Feasibility Matrix
+  const tbody = document.getElementById('feasibility-tbody');
+  tbody.innerHTML = MODEL_SPECS.map(m => {
+    const q4 = totalVram >= m.vram_q4;
+    const q3 = totalVram >= m.vram_q3;
+    const q2 = totalVram >= m.vram_q2;
+    
+    return \`<tr class="feas-row">
+      <td>\${m.name}</td>
+      <td class="feas-cell \${q4 ? 'feas-yes' : 'feas-no'}">\${q4 ? '✅ ' + m.vram_q4 + 'GB' : '❌ ' + m.vram_q4}</td>
+      <td class="feas-cell \${q3 ? 'feas-yes' : 'feas-no'}">\${q3 ? '✅ ' + m.vram_q3 + 'GB' : '❌ ' + m.vram_q3}</td>
+      <td class="feas-cell \${q2 ? 'feas-yes' : 'feas-no'}">\${q2 ? '✅ ' + m.vram_q2 + 'GB' : '❌ ' + m.vram_q2}</td>
+    </tr>\`;
+  }).join('');
+
+  // Recommendation
+  document.getElementById('rec-vram').textContent = totalVram + ' GB';
+  if (totalVram >= 80) {
+    document.getElementById('rec-1').textContent = "→ Mixtral 8x22B @ Q4_K_M  ~12 tok/s";
+    document.getElementById('rec-2').textContent = "→ Llama 3.1 70B @ Q4_K_M  ~25 tok/s";
+  } else if (totalVram >= 42) {
+    document.getElementById('rec-1').textContent = "→ Llama 3.1 70B @ Q4_K_M  ~20 tok/s";
+    document.getElementById('rec-2').textContent = "→ Llama 3.1 8B @ Q4_K_M  ~80 tok/s";
+  } else if (totalVram >= 28) {
+    document.getElementById('rec-1').textContent = "→ Llama 3.1 70B @ Q3_K_S  ~15 tok/s";
+    document.getElementById('rec-2').textContent = "→ Llama 3.1 8B @ Q4_K_M  ~80 tok/s";
+  } else {
+    document.getElementById('rec-1').textContent = "→ Llama 3.1 8B @ Q4_K_M  ~40 tok/s";
+    document.getElementById('rec-2').textContent = "→ Mistral 7B @ Q4_K_M  ~45 tok/s";
+  }
+}
+updateSwarmCapacity();
+
+// ── LIVE STATS TICKER ─────────────────────────────────
+function jitter(val, pct) {
+  return (val * (1 + (Math.random()-.5) * pct)).toFixed(
+    val < 10 ? 1 : 0
+  );
+}
+
+setInterval(() => {
+  document.getElementById('s-tps').textContent  = jitter(48.2, .12);
+  document.getElementById('s-acc').textContent  = jitter(91.4, .04) + '%';
+  document.getElementById('s-rpm').textContent  = jitter(31,   .15);
+
+  const sv = Math.round(55 + Math.random()*18);
+  const sh = Math.round(30 + Math.random()*20);
+  const ne = Math.round(14 + Math.random()*16);
+
+  document.getElementById('bar-scout').style.width     = sv + '%';
+  document.getElementById('bar-scout-lbl').textContent = sv + '%';
+  document.getElementById('bar-shard').style.width     = sh + '%';
+  document.getElementById('bar-shard-lbl').textContent = sh + '%';
+  document.getElementById('bar-net').style.width       = ne + '%';
+  document.getElementById('bar-net-lbl').textContent   = ne + '%';
+}, 2200);
+</script>
+</body>
+</html>

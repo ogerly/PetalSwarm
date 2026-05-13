@@ -1,0 +1,44 @@
+# 🌸 PetalSwarm Lean Mode Gitignore
+
+# Fetched by setup.sh (Do not version)
+llama.cpp/
+nakshatra/
+shards/
+models/
+
+# Python / Environment
+venv/
+.venv/
+env/
+conda-env/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# AAMS Workspace
+WORKING/LOGS/*
+!WORKING/LOGS/.gitkeep
+WORKING/WORKPAPER/*.tmp
+WORKING/MEMORY/*.db
+WORKING/MEMORY/chroma/
+
+# Node (Dashboard)
+node_modules/
+dist/
+.cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.env*
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Large binaries
+*.gguf
+*.bin
+*.exe
+*.dll
+*.so

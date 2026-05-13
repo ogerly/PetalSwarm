@@ -1,0 +1,19 @@
+model:
+  id: "llama3.1-8b-local-swarm"
+  hidden_size: 4096
+  num_blocks: 32
+  wire_dtype: f32
+
+workers:
+  - id: worker-0
+    address: localhost
+    port: 5530
+    layer_range: [0, 16]
+    sub_gguf_path: /mnt/d/Entwicklung/Projekte/web-petals/shards/llama31-8b-shard0.gguf
+    mode: first
+  - id: worker-1
+    address: localhost
+    port: 5531
+    layer_range: [16, 32]
+    sub_gguf_path: /mnt/d/Entwicklung/Projekte/web-petals/shards/llama31-8b-shard1.gguf
+    mode: last

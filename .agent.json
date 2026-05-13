@@ -1,0 +1,225 @@
+{
+  "_spec": "AAMS-MINI/1.0",
+  "_spec_note": "DEPRECATED — use _contract. _spec retained for backward compatibility with AAMS/1.x tooling.",
+  "_doc": "Minimal Agent Manifest for workspace and documentation conventions. Drop this file into any repository. Idempotent: safe to read multiple times.",
+  "_source": "https://github.com/DEVmatrose/AAMS",
+  "_contract": "AAMS/2.0",
+  "_version_date": "2026-04-30",
+
+  "workspace": {
+    "root": "./WORKING",
+    "entry_point": "./READ-AGENT.md",
+
+    "discovery": {
+      "_doc": "Optional container layer. If a WORKSPACE/ directory exists at repo root and contains a WORKING/ subfolder, the agent MUST use WORKSPACE/WORKING/ as effective root. This enables multi-project repos and monorepos to isolate agent workspaces without changing any other paths.",
+      "container_dir": "./WORKSPACE",
+      "detection": "if exists(./WORKSPACE/WORKING/) then effective_root = ./WORKSPACE/WORKING else effective_root = ./WORKING",
+      "fallback": "./WORKING",
+      "affects": "All paths in workspace.structure are relative to effective_root. entry_point stays at repo root."
+    },
+
+    "structure": {
+      "_doc": "Workspace structure conventions. Folders may be created by agents or users following these paths. Never deletes. Never overwrites existing content.",
+      "whitepapers": "./WORKING/WHITEPAPER",
+      "workpapers":      "./WORKING/WORKPAPER",
+      "workpapers_closed": "./WORKING/WORKPAPER/closed",
+      "workpapers_observe": "./WORKING/WORKPAPER/observe",
+      "memory":      "./WORKING/MEMORY",
+      "ltm_store":   "./WORKING/AGENT-MEMORY",
+      "diary":       "./WORKING/DIARY",
+      "logs":        "./WORKING/LOGS",
+      "guidelines":  "./WORKING/GUIDELINES",
+      "tools":       "./WORKING/TOOLS"
+    },
+
+    "documentation_model": {
+      "_doc": "Four-layer documentation model conventions. Describes the relationship between workpaper, whitepaper, diary, and memory layers.",
+      "workpaper": {
+        "purpose": "Session- and task-scoped working documents. Created at session start, closed at session end.",
+        "naming": "WP-{DATE}-{TOPIC}-{SUBTOPIC}-{description}.md",
+        "naming_doc": "DATE=YYYY-MM-DD, TOPIC=3-4 letter UPPERCASE tag (e.g. ARCH, LTM, SPEC), SUBTOPIC=3-4 letter UPPERCASE subtag, description=kebab-case. TOPIC enables RFL pattern-matching.",
+        "location": "./WORKING/WORKPAPER/",
+        "on_close": "move to ./WORKING/WORKPAPER/closed/"
+      },
+      "whitepaper": {
+        "purpose": "Stable architecture and system truth. Written once, updated on structural decisions only.",
+        "naming": "WH-{NNN}-{TOPIC}-{description}.md",
+        "location": "./WORKING/WHITEPAPER/",
+        "on_close": "stays — never moved"
+      },
+      "diary": {
+        "purpose": "Temporal index layer. Pointer-only time log — WHAT was touched WHEN, no content duplication. Hierarchical: daily entries → weekly rollup → monthly summary.",
+        "format": "YYYY-MM-DD | WP: {workpaper} | WH: {whitepaper} | {other files}",
+        "naming": "{YYYY}-{MM}.md",
+        "compression": "daily lines → weekly rollup → monthly summary (429 entries/year max)",
+        "location": "./WORKING/DIARY/",
+        "on_close": "stays — never moved"
+      },
+      "memory": {
+        "purpose": "Long-term context store. Persists cross-session knowledge, changes, decisions.",
+        "location": "./WORKING/MEMORY/",
+        "on_close": "ingest workpaper before closing session"
+      }
+    },
+
+    "bootstrap_rules": {
+      "idempotent": true,
+      "create_if_missing": true,
+      "never_delete": true,
+      "on_entry_point_missing": "create READ-AGENT.md with project scan summary",
+      "agents_md": "create AGENTS.md if missing — bridges AAMS to Copilot, Cursor, Claude Code, Codex, Windsurf and all AGENTS.md-compatible tools",
+      "copilot_instructions": "create .github/copilot-instructions.md pointing to AGENTS.md",
+      "ltm_markdown_threshold": 100,
+      "ltm_warning_at": 90,
+      "ltm_exceeded_behavior": "load_last_20_only",
+      "ltm_mode": "markdown",
+      "_ltm_mode_doc": "'markdown' = ltm-index.md only, zero dependencies, works everywhere. 'vector' = ChromaDB + Python required. Default: 'markdown'. Switch to 'vector' once Python env is set up.",
+      "ltm_store": "./WORKING/AGENT-MEMORY",
+      "_ltm_store_backend_note": "OPTIONAL. .agent.json is zero-dependency by design. The backend below is a recommendation, not a requirement. Remove if you don't want ChromaDB. The markdown audit log (ltm_audit_log) works without any vector store.",
+      "ltm_store_backend_recommended": "chroma",
+      "ltm_store_setup": "pip install chromadb  # only needed for vector store; skip for markdown-only LTM",
+      "ltm_audit_log": "./WORKING/MEMORY/ltm-index.md"
+    },
+
+    "topic_registry": {
+      "_doc": "Official TOPIC tags for workpaper naming. Used for RFL pattern-matching. Extensible — new tags may be added.",
+      "tags": ["ARCH", "SPEC", "LTM", "SEC", "BOOT", "FLD", "RES", "MKT", "ISS", "GOV", "EDU"],
+      "extensible": true
+    },
+
+    "secrets_policy": {
+      "never_in_workpapers": true,
+      "never_in_whitepapers": true,
+      "never_in_memory": true,
+      "never_in_manifest": true,
+      "use": ".env or external secret manager only"
+    },
+
+    "topic_registry": {
+      "_doc": "Official TOPIC tags for workpaper naming. Used for RFL pattern-matching. Extensible — new tags may be added.",
+      "tags": ["ARCH", "SPEC", "LTM", "SEC", "BOOT", "FLD", "RES", "MKT", "ISS", "GOV", "EDU"],
+      "extensible": true
+    },
+
+    "file_safety": {
+      "_doc": "Describes how agents may handle file deletions outside the workspace. Git history is the source of truth for file relevance.",
+      "outside_workspace": {
+        "_doc": "Files outside WORKING/ should be treated with caution before deletion.",
+        "check_git_history": "git log --all --diff-filter=D -- <file> examines whether a file has been committed in any branch.",
+        "if_history_found": "Files with git history may be relevant. Agents should inform the user before deletion.",
+        "if_no_history": "Files without git history may be safe to delete. Agents may proceed with caution.",
+        "manual_rm_rf": "Never use rm -rf with manual file lists without git verification."
+      }
+    },
+
+    "skills": {
+      "_doc": "Describes the relationship between global skill pools and project-local skill adaptations. Skills are crystallized community knowledge — agents may use them as starting points.",
+      "global_pool": {
+        "_doc": "A global pool of skills (e.g. skills.sh) is the source of truth. Not to be modified — only referenced.",
+        "reference": "https://skills.sh"
+      },
+      "local_adaptation": {
+        "_doc": "When a skill is adapted for a project, it carries its origin as a header comment (# source: origin/skill-name) and may be tailored 100% to the project context.",
+        "storage": ".github/skills/ or WORKING/TOOLS/"
+      },
+      "relationship": {
+        "_doc": "Global → Lokal: Quelle → Feinschliff. Exploration → direkter Griff."
+      }
+    },
+
+    "security": {
+      "_doc": "Optional security metadata. Describes the security posture of the agent and its environment. All fields optional.",
+      "last_scan": "2026-04-29",
+      "scan_type": "dependency-vulnerability",
+      "findings": {
+        "_doc": "Security findings categorized by severity.",
+        "critical": 0,
+        "high": 0,
+        "medium": 1,
+        "low": 3
+      },
+      "deployed_services": [
+        {
+          "_doc": "Services deployed by this agent.",
+          "name": "my-service",
+          "type": "api",
+          "version": "1.0.0",
+          "last_audit": "2026-04-29"
+        }
+      ],
+      "behavioral_signals": {
+        "_doc": "Behavioral indicators of agent trustworthiness.",
+        "sessions_without_incident": 48,
+        "last_violation": null,
+        "trust_score": 0.97
+      }
+    },
+
+    "gitignore_patterns": {
+      "_note": "WORKING/MEMORY/ is intentionally NOT ignored — ltm-index.md is the shared collaboration artifact. Only binary/runtime artifacts are excluded.",
+      "_gitkeep_note": "Use glob+negation patterns (WORKING/LOGS/*) instead of folder patterns (WORKING/LOGS/) to keep .gitkeep files trackable. See issue #10.",
+      "always": [
+        "WORKING/LOGS/*",
+        "!WORKING/LOGS/.gitkeep",
+        "WORKING/WORKPAPER/*.tmp"
+      ],
+      "when_using_vector_store": [
+        "WORKING/AGENT-MEMORY/*",
+        "!WORKING/AGENT-MEMORY/.gitkeep",
+        "WORKING/MEMORY/*.db",
+        "WORKING/MEMORY/chroma/"
+      ]
+    }
+  },
+
+  "agent_conventions": {
+    "_doc": "Agent behavior conventions and session lifecycle patterns. Describes typical workflows — not prescriptive rules.",
+    "on_first_entry": [
+      "0. PRE-CHECK: If WORKING/WORKPAPER/ already contains workpapers, STOP — run on_session_start instead.",
+      "1. Read READ-AGENT.md (if exists)",
+      "1a. DISCOVERY: If ./WORKSPACE/WORKING/ exists, use it as effective root for all WORKING/ paths. Otherwise use ./WORKING/ directly.",
+      "2. Create all workspace.structure folders if missing",
+      "3. Scan repository → write first workpaper with sections: session_goal, repository_inventory (file tree + status), key_findings (from README + docs), open_questions, file_protocol, next_steps",
+      "4. Create READ-AGENT.md if missing",
+      "5. Index existing documentation into memory"
+    ],
+    "first_workpaper_sections": [
+      "session_goal",
+      "repository_inventory",
+      "key_findings",
+      "open_questions",
+      "file_protocol",
+      "next_steps"
+    ],
+    "on_session_start": [
+      "0. VERSION-CHECK: Compare _contract (priority) with local ./.aams-version (if exists). If _contract not present, compare _spec (legacy fallback). _spec is a constant value.",
+      "0a. FALLBACK: If version discrepancy detected, execute on_update before continuing.",
+      "1. Read READ-AGENT.md",
+      "2. Query memory for session topic",
+      "3. RFL — Reflection: Determine TOPIC tag for this session. Stage 1: scan WORKPAPER/closed/ for *-{TOPIC}-*. Stage 2: use LTM results. Stage 3: read last closed workpaper. If prior decision conflicts with current goal, flag in workpaper under '## ⚠ RFL Consistency Flag' with source, resolution.",
+      "4. Open or create workpaper for this session (naming: {DATE}-{TOPIC}-{SUBTOPIC}-{description}.md)"
+    ],
+    "on_session_end": [
+      "1. Complete workpaper (file protocol, decisions, next steps)",
+      "2. Update Whitepapers if session contains architectural decisions (knowledge chain: WP → WH → LTM — never skip)",
+      "3. Ingest workpaper into memory (after Whitepapers are current — ensures LTM learns fresh truth, not stale WP)",
+      "4. Move workpaper to closed/",
+      "5. Update READ-AGENT.md if architecture changed"
+    ],
+    "on_update": [
+      "Compare `_contract` (priority) or `_spec` (legacy fallback) version with local .aams-version",
+      "If discrepancy detected: read CHANGELOG.md section for new version",
+      "For Minor-Bump (1.x → 1.y): write READ-CHANGELOG.md with new features",
+      "For Major-Bump (x.0 → y.0): inform about potential Breaking Changes, read MIGRATIONS.md",
+      "Write updated READ-AGENT.md",
+      "Set .aams-version in target repo to new version"
+    ],
+    "version_detection": {
+      "_doc": "Mechanism to detect if .agent.json has been updated via curl. Compare _contract (priority) with stored .aams-version. _spec (legacy fallback) used only if _contract not present.",
+      "local_version_file": "./.aams-version",
+      "check": "if exists(local_version_file) and local_version != _contract: trigger on_update",
+      "fallback_check": "if exists(local_version_file) and _contract not present and local_version != _spec: trigger on_update (legacy)",
+      "update": "write new _contract value to local_version_file after on_update completes"
+    }
+  }
+}
